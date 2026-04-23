@@ -2,6 +2,19 @@
 
 A production-ready, highly interactive multi-step loan application form built with React. Features an elegant glassmorphism UI, real-time validation, dynamic conditional step routing, and auto-save capabilities.
 
+## Live Demo
+
+https://loan-web-two.vercel.app/
+
+## Screenshots
+
+1. Loan Details Step
+
+Personal Information
+Employment Step
+Documents Upload
+Review Page
+
 ## Features
 
 - **8-Step Dynamic Wizard**: Smooth navigation through Loan Details, Personal Info, KYC, Address, Employment, Co-applicant, Documents, and Review.
@@ -16,6 +29,15 @@ A production-ready, highly interactive multi-step loan application form built wi
   - Interactive E-Signature canvas pad.
 - **Premium Aesthetics**: Built with Tailwind CSS, featuring smooth background gradients, interactive hover micro-animations, and glassmorphism component styling.
 - **End-to-End Testing**: Includes a comprehensive Cypress testing suite verifying core application logic and conditional behaviors.
+
+## Why This Project?
+
+This project simulates a real-world fintech loan application flow, focusing on:
+
+- Reducing user drop-off with step-by-step UX
+- Ensuring data persistence (auto-save)
+- Handling conditional user journeys
+- Maintaining form validation integrity
 
 ## Tech Stack
 
