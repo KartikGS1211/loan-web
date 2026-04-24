@@ -91,6 +91,12 @@ const FileUpload = ({ name, label }) => {
           ))}
         </div>
       )}
+
+      {files.length > 0 && (
+        <p className="text-xs text-green-600 mt-2">
+          {files.length} file(s) uploaded
+        </p>
+      )}
       <ErrorMessage name={name} />
     </div>
   );

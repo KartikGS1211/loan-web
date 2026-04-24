@@ -79,12 +79,16 @@ const SignaturePad = ({ name, label }) => {
         <SignatureCanvas
           ref={sigCanvas}
           onEnd={saveSignature}
-          penColor="blue"
+          penColor="black"
           canvasProps={{
             className: "w-full h-40 cursor-crosshair",
             id: "signature-pad",
           }}
         />
+
+        {!signatureValue && (
+          <p className="text-xs text-red-500 mt-1">Signature is required</p>
+        )}
       </div>
       <ErrorMessage name={name} />
     </div>

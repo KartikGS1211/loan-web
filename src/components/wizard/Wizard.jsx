@@ -1,39 +1,59 @@
-import React, { useEffect, useState } from 'react';
-import { useForm, FormProvider } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useFormStore } from '../../hooks/useFormStore';
+import React, { useEffect, useState } from "react";
+import { useForm, FormProvider } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useFormStore } from "../../hooks/useFormStore";
 
-import ProgressBar from './ProgressBar';
-import StepNavigation from './StepNavigation';
-import StepRenderer from './StepRenderer';
-import SuccessScreen from './SuccessScreen';
+import ProgressBar from "./ProgressBar";
+import StepNavigation from "./StepNavigation";
+import StepRenderer from "./StepRenderer";
+import SuccessScreen from "./SuccessScreen";
 
 // Import all schemas to dynamically pick based on current step
-import { 
-  step1Schema, step2Schema, step3Schema, step4Schema, 
-  step5Schema, step6Schema, step7Schema, step8Schema 
-} from '../../schemas/validationSchema';
+import {
+  step1Schema,
+  step2Schema,
+  step3Schema,
+  step4Schema,
+  step5Schema,
+  step6Schema,
+  step7Schema,
+  step8Schema,
+} from "../../schemas/validationSchema";
 
 const schemas = [
-  step1Schema, step2Schema, step3Schema, step4Schema,
-  step5Schema, step6Schema, step7Schema, step8Schema
+  step1Schema,
+  step2Schema,
+  step3Schema,
+  step4Schema,
+  step5Schema,
+  step6Schema,
+  step7Schema,
+  step8Schema,
 ];
 
 const Wizard = () => {
-  const { formData, currentStep, setFormData, setCurrentStep, nextStep, prevStep, resetForm } = useFormStore();
+  const {
+    formData,
+    currentStep,
+    setFormData,
+    setCurrentStep,
+    nextStep,
+    prevStep,
+    resetForm,
+  } = useFormStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
   const methods = useForm({
     resolver: zodResolver(schemas[currentStep]),
     defaultValues: formData,
-    mode: 'onChange'
+    mode: "onChange",
   });
 
   const { watch, reset, trigger, getValues } = methods;
   // Determine if we should skip co-applicant using latest available amount.
   // Watch value is used first so decisions react immediately to current form edits.
-  const watchedLoanAmount = watch('loanAmount');
+  const watchedLoanAmount = watch("loanAmount");
   const effectiveLoanAmount = Number.isFinite(watchedLoanAmount)
     ? watchedLoanAmount
     : Number(formData.loanAmount);
@@ -44,7 +64,9 @@ const Wizard = () => {
     const subscription = watch((value) => {
       const handler = setTimeout(() => {
         // Clean undefined values so unmounted fields don't overwrite formData with undefined
-        const cleanedValue = Object.fromEntries(Object.entries(value).filter(([_, v]) => v !== undefined));
+        const cleanedValue = Object.fromEntries(
+          Object.entries(value).filter(([_, v]) => v !== undefined),
+        );
         setFormData(cleanedValue);
       }, 2000);
       return () => clearTimeout(handler);
@@ -64,7 +86,7 @@ const Wizard = () => {
     if (currentStep === schemas.length - 1) {
       setIsSubmitting(true);
       // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
       setIsSubmitting(false);
       setIsSuccess(true);
     } else {
@@ -90,15 +112,29 @@ const Wizard = () => {
     setIsSuccess(false);
   };
   const handleContinue = async () => {
-    const isValid = await trigger();
+    let isValid = false;
+
+    //Step 7 (Documents + Signature)
+    if (currentStep === 6) {
+      isValid = await trigger(["documents", "signature"]);
+    } else {
+      isValid = await trigger();
+    }
+
     if (!isValid) return;
+
     await onSubmit(getValues());
   };
 
   return (
     <div className="glass-panel p-6 sm:p-10 w-full animate-fade-in relative z-20">
-      {!isSuccess && <ProgressBar currentStep={currentStep} skipCoApplicant={skipCoApplicant} />}
-      
+      {!isSuccess && (
+        <ProgressBar
+          currentStep={currentStep}
+          skipCoApplicant={skipCoApplicant}
+        />
+      )}
+
       {isSuccess ? (
         <SuccessScreen resetForm={handleReset} />
       ) : (
@@ -114,9 +150,9 @@ const Wizard = () => {
               <StepRenderer currentStep={currentStep} />
             </div>
 
-            <StepNavigation 
-              currentStep={currentStep} 
-              totalSteps={schemas.length} 
+            <StepNavigation
+              currentStep={currentStep}
+              totalSteps={schemas.length}
               onBack={handleBack}
               onContinue={handleContinue}
               isSubmitting={isSubmitting}
