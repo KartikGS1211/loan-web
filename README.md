@@ -10,23 +10,23 @@ https://loan-web-two.vercel.app/
 
 1. Loan Details Step
 
-![Loan Details](./assets/screenshots/step1.png)
+![Loan Details](./src/assets/step1.png)
 
 Personal Info
 
-![Personal Info](./assets/screenshots/step2.png)
+![Personal Info](./src/assets/step2.png)
 
 Employment Step
 
-![Employment Step](./assets/screenshots/step5.png)
+![Employment Step](./src/assets/step5.png)
 
 Documents Upload
 
-![Documents Upload](./assets/screenshots/step7.png)
+![Documents Upload](./src/assets/step7.png)
 
 Review Page
 
-![Review Page](./assets/screenshots/step8.png)
+![Review Page](./src/assets/step8.png)
 
 ## Features
 
