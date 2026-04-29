@@ -27,9 +27,15 @@ const Step2PersonalInfo = () => {
       ) {
         age -= 1;
       }
-      const maxTenureMonths = (65 - age) * 12;
-      if (loanTenure > maxTenureMonths) {
-        setValue("loanTenure", maxTenureMonths);
+
+      // Only adjust tenure if age is within valid bounds (21-65).
+      // This prevents a bug where typing a year like "0001" temporarily makes age=2025,
+      // resulting in a negative maxTenureMonths, which then irreversibly overwrites the tenure.
+      if (age >= 21 && age <= 65) {
+        const maxTenureMonths = (65 - age) * 12;
+        if (loanTenure > maxTenureMonths) {
+          setValue("loanTenure", maxTenureMonths);
+        }
       }
     }
   }, [dob, loanTenure, setValue]);
