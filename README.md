@@ -1,4 +1,4 @@
-# LendSwift — Multi-Step Loan Application Form
+# SwiftLoan Application — Multi-Step Loan Application Form
 
 A production-grade, 8-step multi-step loan application form built for **LendSwift**, a fictional Indian digital lending startup (RBI-registered NBFC). Simulates a real-world fintech onboarding flow with real-time validation, conditional field rendering, document upload with client-side compression, e-signature capture, AES-256-GCM encrypted auto-save, and a pre-approval summary generator compliant with RBI Digital Lending Guidelines (September 2022).
 
