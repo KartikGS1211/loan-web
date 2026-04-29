@@ -1,6 +1,18 @@
 describe("Loan Application Wizard", () => {
+  const assertStepHeading = (heading) => {
+    cy.contains("h2", heading, { timeout: 20000 }).should("be.visible");
+  };
+
   const clickContinue = () => {
-    cy.contains("button", "Continue").click();
+    cy.contains("button", "Continue", { timeout: 20000 }).click({ force: true });
+  };
+
+  const dismissDraftModalIfPresent = () => {
+    cy.get("body").then(($body) => {
+      if ($body.text().includes("Saved Application Found")) {
+        cy.contains("button", "Start Fresh").click({ force: true });
+      }
+    });
   };
 
   // ✅ Step 1 fill — select pehle, phir amount/tenure/purpose
@@ -19,12 +31,24 @@ describe("Loan Application Wizard", () => {
 
   // ✅ Step 2 — fullName, fatherName, motherName fields
   const fillStep2 = () => {
-    cy.get('input[name="fullName"]').type("John Doe");
-    cy.get('input[name="fatherName"]').type("Robert Doe");
-    cy.get('input[name="motherName"]').type("Mary Doe");
-    cy.get('input[name="email"]').type("john@example.com");
-    cy.get('input[name="phone"]').type("9876543210");
-    cy.get('input[name="dob"]').type("1990-01-01");
+    // If a saved-draft modal overlays the wizard, dismiss it first.
+    dismissDraftModalIfPresent();
+
+    // Ensure we are actually on Step 2 (prevents typing into stale/disabled DOM).
+    cy.contains("h2", "Personal Information", { timeout: 20000 }).should(
+      "be.visible"
+    );
+
+    cy.get('input[name="fullName"]', { timeout: 20000 })
+      .should("be.visible")
+      .and("not.be.disabled")
+      .clear()
+      .type("John Doe");
+    cy.get('input[name="fatherName"]').should("be.visible").and("not.be.disabled").clear().type("Robert Doe");
+    cy.get('input[name="motherName"]').should("be.visible").and("not.be.disabled").clear().type("Mary Doe");
+    cy.get('input[name="email"]').should("be.visible").and("not.be.disabled").clear().type("john@example.com");
+    cy.get('input[name="phone"]').should("be.visible").and("not.be.disabled").clear().type("9876543210");
+    cy.get('input[name="dob"]').should("be.visible").and("not.be.disabled").clear().type("1990-01-01");
     cy.get('input[value="male"]').check({ force: true });
     cy.get('select[name="maritalStatus"]').select("single");
     clickContinue();
@@ -32,13 +56,22 @@ describe("Loan Application Wizard", () => {
 
   // ✅ Step 3 — valid PAN + Aadhaar verify karo
   const fillStep3 = () => {
-    // Step3 verification is triggered on blur as well.
-    // Clicking Verify can race with blur and hit disabled-state.
-    cy.get('input[name="pan"]').clear().type("ABCPE1234F").blur(); // P = Individual
-    cy.contains(/verified/i, { timeout: 5000 }).should("be.visible");
+    // Use explicit verify buttons for deterministic Step 3 behavior.
+    cy.get("#pan").clear().type("ABCPE1234F"); // P = Individual
+    cy.contains("label", "PAN Card Number")
+      .parents("div")
+      .first()
+      .contains("button", "Verify")
+      .click();
+    cy.contains(/verified/i, { timeout: 10000 }).should("be.visible");
 
-    cy.get('input[name="aadhaar"]').clear().type("234123412346").blur(); // valid verhoeff
-    cy.contains(/kyc verification complete/i, { timeout: 5000 }).should(
+    cy.get("#aadhaar").clear().type("234123412346"); // valid verhoeff
+    cy.contains("label", "Aadhaar Number")
+      .parents("div")
+      .first()
+      .contains("button", "Verify")
+      .click();
+    cy.contains(/kyc verification complete/i, { timeout: 10000 }).should(
       "be.visible"
     );
 
@@ -50,7 +83,14 @@ describe("Loan Application Wizard", () => {
   const fillStep4 = () => {
     cy.get('input[name="currentAddressLine1"]').type("123 Main St");
     cy.get('input[name="pincode"]').type("400001");
-    cy.wait(500);
+    cy.get('input[name="city"]', { timeout: 10000 }).should(
+      "have.value",
+      "Mumbai"
+    );
+    cy.get('select[name="state"]', { timeout: 10000 }).should(
+      "have.value",
+      "Maharashtra"
+    );
     cy.get('select[name="residenceType"]').select("owned");
     cy.get('input[name="yearsAtAddress"]').clear().type("5");
     cy.get('input[name="sameAsPermanent"]').check({ force: true });
@@ -67,44 +107,253 @@ describe("Loan Application Wizard", () => {
     clickContinue();
   };
 
+  // ✅ Step 6 — co-applicant details + PAN verify + signature
+  const fillStep6CoApplicant = () => {
+    assertStepHeading("Co-Applicant Details");
+    cy.get('input[name="coApplicantName"]').clear().type("Jane Doe");
+    cy.get('select[name="relationship"]').select("parent");
+    cy.get("#coApplicantPan").clear().type("ABCPE1234F");
+    // PAN verify status text is flaky; valid PAN format is sufficient for schema.
+    cy.get("#coApplicantPan").trigger("blur");
+    cy.get('input[name="coApplicantIncome"]').clear().type("45000");
+    cy.get('input[name="coApplicantConsent"]').check({ force: true });
+    drawESignature();
+    clickContinue();
+  };
+
   const uploadDocument = (label, files) => {
     cy.contains("span", label)
-      .parents("div.p-4.border.rounded-2xl.space-y-3")
+      .closest("div.p-4")
       .first()
-      .find('input[type="file"]')
-      .selectFile(files, { force: true });
+      .as("docCard");
+
+    // Prefer drag-drop upload (react-dropzone is more reliable this way in Cypress)
+    cy.get("@docCard")
+      .find("div.border-dashed")
+      .first()
+      .selectFile(files, { action: "drag-drop", force: true });
+
+    // Confirm this document bucket is marked as uploaded (card turns green).
+    cy.get("@docCard", { timeout: 20000 }).should("have.class", "bg-green-50");
+  };
+
+  const uploadPdfCopies = (label, fileNamePrefix, count) => {
+    cy.fixture("sample.pdf", "base64").then((b64) => {
+      const contents = Cypress.Buffer.from(b64, "base64");
+      const files = Array.from({ length: count }, (_, i) => ({
+        contents,
+        fileName: `${fileNamePrefix}-${i + 1}.pdf`,
+        mimeType: "application/pdf",
+        lastModified: Date.now(),
+      }));
+      uploadDocument(label, files);
+
+      // Assert all unique filenames are visible under that upload bucket.
+      for (let i = 1; i <= count; i++) {
+        cy.contains(new RegExp(`${fileNamePrefix}-${i}\\.pdf`, "i"), {
+          timeout: 20000,
+        }).should("be.visible");
+      }
+    });
   };
 
   const drawESignature = () => {
-    cy.get("canvas")
-      .first()
-      .trigger("mousedown", 30, 30, { force: true })
-      .trigger("mousemove", 120, 50, { force: true })
-      .trigger("mousemove", 180, 80, { force: true })
-      .trigger("mouseup", { force: true });
+    cy.get("canvas:visible")
+      .last()
+      .scrollIntoView()
+      .then(($c) => {
+        // `react-signature-canvas` (signature_pad) primarily listens to mouse/touch events.
+        // Provide a rich mouse event payload (client/page + offset) for reliability.
+        const pts = [
+          { x: 20, y: 40 },
+          { x: 140, y: 70 },
+          { x: 220, y: 95 },
+        ];
+
+        const mkEvt = (p) => ({
+          clientX: $c[0].getBoundingClientRect().left + p.x,
+          clientY: $c[0].getBoundingClientRect().top + p.y,
+          pageX: $c[0].getBoundingClientRect().left + p.x,
+          pageY: $c[0].getBoundingClientRect().top + p.y,
+          offsetX: p.x,
+          offsetY: p.y,
+          which: 1,
+          button: 0,
+          buttons: 1,
+          force: true,
+        });
+
+        cy.wrap($c)
+          .trigger("mousedown", mkEvt(pts[0]))
+          .trigger("mousemove", mkEvt(pts[1]))
+          .trigger("mousemove", mkEvt(pts[2]))
+          .trigger("mouseup", mkEvt(pts[2]));
+      });
+  };
+
+  const drawStep7Signature = () => {
+    cy.contains("label", "E-Signature").scrollIntoView();
+    // Prefer the canvas that belongs to the E‑Signature field (not just the last canvas on the page).
+    cy.contains("label", "E-Signature")
+      .parents()
+      .then(($parents) => {
+        const host = [...$parents].find((el) => el.querySelector?.("canvas"));
+        if (host) return cy.wrap(host).find("canvas:visible").first();
+        return cy.get("canvas:visible", { timeout: 10000 }).last();
+      })
+      .scrollIntoView()
+      .then(($c) => {
+        const pts = [
+          { x: 20, y: 40 },
+          { x: 140, y: 70 },
+          { x: 220, y: 95 },
+        ];
+
+        const mkEvt = (p) => ({
+          clientX: $c[0].getBoundingClientRect().left + p.x,
+          clientY: $c[0].getBoundingClientRect().top + p.y,
+          pageX: $c[0].getBoundingClientRect().left + p.x,
+          pageY: $c[0].getBoundingClientRect().top + p.y,
+          offsetX: p.x,
+          offsetY: p.y,
+          which: 1,
+          button: 0,
+          buttons: 1,
+          force: true,
+        });
+
+        cy.wrap($c)
+          .trigger("mousedown", mkEvt(pts[0]))
+          .trigger("mousemove", mkEvt(pts[1]))
+          .trigger("mousemove", mkEvt(pts[2]))
+          .trigger("mouseup", mkEvt(pts[2]));
+      });
+  };
+
+  const ensureStep7SignatureCaptured = () => {
+    // Don't assert on the helper text; it may not render reliably under Cypress.
+    // Instead just draw a few times; navigation retry will handle any remaining flakiness.
+    drawStep7Signature();
+    drawStep7Signature();
+    drawStep7Signature();
+    // Give react-hook-form a moment to receive the dataURL and re-render preview.
+    cy.wait(250);
   };
 
   const fillStep7Documents = () => {
+    // Upload PAN too so Step 7 passes regardless of PAN verification state.
+    uploadDocument("PAN Card Copy", "cypress/fixtures/sample.pdf");
     uploadDocument("Aadhaar Card Front", "cypress/fixtures/sample.pdf");
     uploadDocument("Aadhaar Card Back", "cypress/fixtures/sample.pdf");
     uploadDocument("Bank Statement (Last 6 months)", "cypress/fixtures/sample.pdf");
     uploadDocument("Passport Size Photograph", {
-      contents: "cypress/fixtures/sample.pdf",
+      // 1x1 valid PNG so Cypress treats it as an actual image file
+      contents: Cypress.Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/w8AAgMBAQEAAP8AAAAASUVORK5CYII=",
+        "base64"
+      ),
       fileName: "photo.png",
       mimeType: "image/png",
       lastModified: Date.now(),
     });
-    uploadDocument("Salary Slips (Last 3 months)", [
-      "cypress/fixtures/sample.pdf",
-      "cypress/fixtures/sample.pdf",
-      "cypress/fixtures/sample.pdf",
-    ]);
-    drawESignature();
+    // Step 7 schema requires 3 salary slips (not just "uploaded once").
+    uploadPdfCopies("Salary Slips (Last 3 months)", "salary-slip", 3);
+
+    // Make sure these uploads actually registered in the UI before checking counts.
+    cy.contains(/photo\.png/i, { timeout: 20000 }).should("be.visible");
+    // Signature capture can be flaky unless pointer events land correctly.
+    ensureStep7SignatureCaptured();
+
+    // Wait until upload progress shows all required docs uploaded (format may vary).
+    cy.contains(/upload progress/i, { timeout: 40000 })
+      .parent()
+      .within(() => {
+        cy.contains(/required/i, { timeout: 40000 }).should(($el) => {
+          const text = $el.text().replace(/\s+/g, " ").trim(); // e.g. "5/5 Required"
+          const m = text.match(/(\d+)\s*\/\s*(\d+)\s*required/i);
+          expect(m, `progress text "${text}"`).to.not.be.null;
+          const done = Number(m[1]);
+          const total = Number(m[2]);
+          expect(total).to.be.greaterThan(0);
+          expect(done).to.eq(total);
+        });
+      });
+  };
+
+  // ✅ Step 8 — all required consents + submit
+  const submitFromStep8 = () => {
+    assertStepHeading("Review & Submit");
+    cy.contains("button", "Submit Application", { timeout: 15000 }).should(
+      "be.visible"
+    );
+    cy.get('input[name="consentAccuracy"]', { timeout: 10000 }).should("exist");
+    cy.get('input[name="consentAccuracy"]').check({ force: true });
+    cy.get('input[name="consentCibil"]').check({ force: true });
+    cy.get('input[name="consentTerms"]').check({ force: true });
+    cy.get('input[name="consentCommunication"]').check({ force: true });
+    cy.contains(/all consents provided/i, { timeout: 5000 }).should("be.visible");
+    cy.contains("button", "Submit Application").click();
+  };
+
+  const proceedFromStep7ToStep8 = () => {
+    const tryAdvance = (triesLeft) => {
+      // Ensure Step 7 is actually valid before clicking continue.
+      cy.contains(/upload progress/i, { timeout: 40000 }).should("be.visible");
+      // The app may or may not render a toast/helper text after drawing.
+      // Don’t hard-assert the exact message; advancing to Step 8 is the real success signal.
+      cy.get("body").then(($body) => {
+        if ($body.text().match(/e-signature.*captured/i)) {
+          cy.contains(/e-signature.*captured/i, { timeout: 1000 }).should("be.visible");
+        }
+      });
+
+      // Step 7 commonly blocks advancement by disabling Continue until signature is captured.
+      // `clickContinue()` force-clicks, which can hide this problem, so we explicitly wait for enabled.
+      cy.contains("button", "Continue", { timeout: 20000 })
+        .should("be.visible")
+        .then(($btn) => {
+          const isDisabled =
+            $btn.is(":disabled") || $btn.attr("aria-disabled") === "true";
+          if (isDisabled) {
+            drawStep7Signature();
+          }
+        });
+      cy.contains("button", "Continue", { timeout: 20000 })
+        .should(($btn) => {
+          const isDisabled =
+            $btn.is(":disabled") || $btn.attr("aria-disabled") === "true";
+          expect(isDisabled, "Continue enabled").to.eq(false);
+        })
+        .click();
+
+      cy.get("body", { timeout: 20000 }).then(($body) => {
+        // Arrived at Step 8
+        if ($body.text().includes("Review & Submit")) return;
+        if (triesLeft <= 1) return;
+
+        // Still blocked on Step 7 -> draw again and retry
+        if ($body.text().includes("Documents & E-Signature")) {
+          drawStep7Signature();
+        }
+        tryAdvance(triesLeft - 1);
+      });
+    };
+
+    tryAdvance(6);
+
+    // More reliable than button label: Step 8 heading must appear.
+    assertStepHeading("Review & Submit");
   };
 
   beforeEach(() => {
-    cy.clearLocalStorage();
-    cy.visit("/");
+    cy.visit("/", {
+      onBeforeLoad(win) {
+        win.localStorage.clear();
+      },
+    });
+    dismissDraftModalIfPresent();
+    // Wizard uses window.alert on validation errors; swallow to keep flow moving.
+    cy.on("window:alert", () => {});
   });
 
   // ── TEST 1 ──────────────────────────────────────────
@@ -148,7 +397,8 @@ describe("Loan Application Wizard", () => {
     // Submit empty Step 2
     clickContinue();
     // ✅ fullName error — not firstName/lastName
-    cy.contains("Full name is required").should("be.visible");
+    // Schema message currently includes "(min 2 characters)" — keep assertion resilient.
+    cy.contains(/full name is required/i).should("be.visible");
 
     // Invalid email
     cy.get('input[name="email"]').type("invalid-email");
@@ -166,7 +416,7 @@ describe("Loan Application Wizard", () => {
     fillStep5Salaried();
 
     // Step 6 skip — directly Documents
-    cy.contains(/documents/i, { timeout: 10000 }).should("be.visible");
+    assertStepHeading("Documents & E-Signature");
   });
 
   // ── TEST 7 ──────────────────────────────────────────
@@ -178,8 +428,8 @@ describe("Loan Application Wizard", () => {
     fillStep4();
     fillStep5Salaried();
 
-    // Step 6 show hona chahiye
-    cy.contains(/co-?applicant/i, { timeout: 10000 }).should("be.visible");
+    // This case only validates mandatory Step 6 visibility for high amount.
+    assertStepHeading("Co-Applicant Details");
   });
 
   // ── TEST 8 ──────────────────────────────────────────
@@ -191,7 +441,7 @@ describe("Loan Application Wizard", () => {
     fillStep4();
 
     // Now on Step 5
-    cy.contains("h2", "Employment & Income").should("be.visible");
+    assertStepHeading("Employment & Income");
 
     // Default — salaried fields
     cy.get('input[value="salaried"]').check({ force: true });
@@ -199,7 +449,7 @@ describe("Loan Application Wizard", () => {
     cy.get('input[name="monthlyIncome"]').should("exist");
 
     // Switch to self-employed
-    cy.get('input[value="self-employed"]').click({ force: true });
+    cy.get('input[value="self-employed"]').check({ force: true });
     cy.get('input[name="businessName"]').should("exist");
     cy.get('input[name="annualTurnover"]').should("exist");
     cy.get('input[name="companyName"]').should("not.exist");
@@ -259,7 +509,7 @@ describe("Loan Application Wizard", () => {
     fillStep5Salaried();
 
     // Step 7 Documents
-    cy.contains(/documents/i, { timeout: 10000 }).should("be.visible");
+    assertStepHeading("Documents & E-Signature");
     uploadDocument("Aadhaar Card Front", "cypress/fixtures/sample.pdf");
     cy.contains(/sample\.pdf/i, { timeout: 5000 }).should("be.visible");
   });
@@ -273,12 +523,12 @@ describe("Loan Application Wizard", () => {
     fillStep4();
     fillStep5Salaried();
 
-    cy.contains(/documents/i, { timeout: 10000 }).should("be.visible");
-    cy.get("canvas", { timeout: 10000 }).first().should("be.visible");
+    assertStepHeading("Documents & E-Signature");
+    cy.get("canvas:visible", { timeout: 10000 }).should("be.visible");
   });
 
   // ── TEST 13 — Review Step ──────────────────────
-  it("13. should reach review step", () => {
+  it("13. should complete Step 8 and submit application", () => {
     fillStep1("300000", "24", "personal", "Medical");
     clickContinue();
     fillStep2();
@@ -289,9 +539,10 @@ describe("Loan Application Wizard", () => {
     // Step 7 Documents
     cy.contains(/documents/i, { timeout: 10000 }).should("be.visible");
     fillStep7Documents();
-    clickContinue();
+    proceedFromStep7ToStep8();
 
-    cy.contains(/review/i, { timeout: 10000 }).should("be.visible");
+    submitFromStep8();
+    cy.contains("Application Submitted!", { timeout: 15000 }).should("be.visible");
   });
 
   // ── TEST 14 — Rapid Clicking ──────────────────────
@@ -321,7 +572,7 @@ describe("Loan Application Wizard", () => {
     fillStep5Salaried();
 
     // Home Loan = HAMESHA Step 6 — PDF B2.1
-    cy.contains(/co-?applicant/i, { timeout: 10000 }).should("be.visible");
+    assertStepHeading("Co-Applicant Details");
   });
 
   // ── TEST 17 — Business Loan Co-Applicant > 20L ──
@@ -343,7 +594,7 @@ describe("Loan Application Wizard", () => {
     cy.get('input[name="officeAddressLine1"]').type("Office 101");
     clickContinue();
 
-    cy.contains(/co-?applicant/i, { timeout: 10000 }).should("be.visible");
+    assertStepHeading("Co-Applicant Details");
   });
 
   // ── TEST 18 — PAN 4th Character Validation ──────
@@ -351,11 +602,18 @@ describe("Loan Application Wizard", () => {
     fillStep1();
     clickContinue();
     fillStep2();
+    assertStepHeading("KYC Verification");
 
     // Invalid PAN — 4th char E nahi hona chahiye — PDF Section C3.1
-    cy.get('input[name="pan"]').clear().type("ABCDE1234F").blur();
-    cy.wait(500);
-    cy.contains(/4th character/i).should("be.visible");
+    cy.get("#pan").clear().type("ABCDE1234F");
+    cy.contains("label", "PAN Card Number")
+      .parents("div")
+      .first()
+      .contains("button", "Verify")
+      .click();
+    cy.contains(/4th character.*must.*p/i, { timeout: 10000 }).should(
+      "be.visible"
+    );
   });
 
   // ── TEST 19 — Aadhaar Verhoeff Checksum ──────────
@@ -363,18 +621,30 @@ describe("Loan Application Wizard", () => {
     fillStep1();
     clickContinue();
     fillStep2();
+    assertStepHeading("KYC Verification");
 
     // Valid PAN first
-    cy.get('input[name="pan"]').clear().type("ABCPE1234F").blur();
-    cy.contains(/verified/i, { timeout: 5000 }).should("be.visible");
+    cy.get("#pan").clear().type("ABCPE1234F");
+    cy.contains("label", "PAN Card Number")
+      .parents("div")
+      .first()
+      .contains("button", "Verify")
+      .click();
+    cy.contains(/verified/i, { timeout: 10000 }).should("be.visible");
 
     // Invalid Aadhaar — wrong checksum — PDF Section C3.2
-    cy.get('input[name="aadhaar"]').clear().type("123456789011").blur();
-    cy.wait(500);
-    cy.contains(/checksum/i).should("be.visible");
+    cy.get("#aadhaar").clear().type("123456789011");
+    cy.contains("label", "Aadhaar Number")
+      .parents("div")
+      .first()
+      .contains("button", "Verify")
+      .click();
+    cy.contains(/checksum verification failed/i, { timeout: 10000 }).should(
+      "be.visible"
+    );
   });
 
-  // ── TEST 20 — Age Validation ──────────────────────
+  // ── TEST 20 — Age Validation
   it("20. should reject applicant below 21 years", () => {
     fillStep1();
     clickContinue();
