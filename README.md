@@ -6,9 +6,10 @@ A production-grade, 8-step multi-step loan application form built for **LendSwif
 
 ---
 
-## Live Demo
+## Live Demo & Source Code
 
-**[https://loan-web-two.vercel.app/](https://loan-web-two.vercel.app/)**
+- **Live Demo:** [https://loan-web-two.vercel.app/](https://loan-web-two.vercel.app/)
+- **GitHub Repository:** [https://github.com/KartikGS1211/loan-web](https://github.com/KartikGS1211/loan-web)
 
 ---
 
