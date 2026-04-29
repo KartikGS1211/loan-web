@@ -2,7 +2,7 @@
 
 A production-grade, 8-step multi-step loan application form built for **LendSwift**, a fictional Indian digital lending startup (RBI-registered NBFC). Simulates a real-world fintech onboarding flow with real-time validation, conditional field rendering, document upload with client-side compression, e-signature capture, AES-256-GCM encrypted auto-save, and a pre-approval summary generator compliant with RBI Digital Lending Guidelines (September 2022).
 
-> Built as part of a Front-End Engineering assessment by Zetheta Algorithms Private Limited.
+
 
 ---
 
@@ -325,6 +325,3 @@ The `schemas` array is dynamically rebuilt inside the Wizard component on every 
 
 ---
 
-## License
-
-This project was built for assessment purposes under Zetheta Algorithms Private Limited. Not for commercial distribution.
