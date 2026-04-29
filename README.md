@@ -21,9 +21,11 @@ A production-grade, 8-step multi-step loan application form built for **LendSwif
 | Step 2 — Personal Info     | ![Personal Info](./src/assets/step2.png) |
 | Step 5 — Employment        | ![Employment](./src/assets/step5.png)    |
 | Step 7 — Documents         | ![Documents]                             |
-| (./src/assets/step7-1.png) | (./src/assets/step7-2.png)               |
+| (./src/assets/step7_1.png) |
+| (./src/assets/step7_2.png) |
 | Step 8 — Review            | ![Review]                                |
-| (./src/assets/step8-1.png) | (./src/assets/step8-2.png)               |
+| (./src/assets/step8_1.png) |
+| (./src/assets/step8_2.png) |
 
 ---
 
